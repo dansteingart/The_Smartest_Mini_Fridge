@@ -120,7 +120,7 @@ void loop()
         if (state == 1)    stater(0); // if currently hot, make neutral
         else if (state==0) stater(2); // if neutral, make cold
       }
-      lchange = millis(); //waiting period redefined.
+      lchange = millis(); //waiting period redefined
     }
 
     if (millis() - sendTime > 5000)
