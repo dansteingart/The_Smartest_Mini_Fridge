@@ -2,6 +2,11 @@
 #include <RelayShield.h>
 #include <pid.h>
 #include <math.h>
+#include "Adafruit_SSD1306.h"
+#include "Adafruit_GFX.h"
+#include <Arduino.h>
+#include <SPI.h>
+#include <Wire.h>
 
 RelayShield myRelays;
 char publishString[200]; //a place holer for the publish string
