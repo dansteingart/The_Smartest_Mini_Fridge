@@ -1,6 +1,7 @@
 // This #include statement was automatically added by the Particle IDE.
 #include <RelayShield.h>
 #include <pid.h>
+#include <math.h>
 
 RelayShield myRelays;
 char publishString[200]; //a place holer for the publish string
@@ -10,11 +11,15 @@ int state = 0;
 double Setpoint, Input, Output;
 
 //Specify the links and initial tuning parameters
-PID myPID(&Input, &Output, &Setpoint,1,4,1, PID::DIRECT);
+PID myPID(&Input, &Output, &Setpoint,4,8,2, PID::DIRECT);
 int WindowSize = 1000;
 unsigned long windowStartTime;
 unsigned long sendTime;
 bool pidder = false;
+
+unsigned long lchange = 0;
+int diff = 1000; //don't switch faster than
+
 
 void setup() {
     //.begin() sets up a couple of things and is necessary to use the rest of the functions
@@ -39,31 +44,52 @@ void setup() {
 
 }
 
+float therm(float an)
+{
+    float R2 = 10000.0;
+    float V1 = 4095.0;
+
+    //R1 = ((V1/a0)-1)*R2
+    float R1 = ((V1/an)-1)*R2;
+
+    float B  = 3950.0;
+    float T0 = 296.0;
+    float R0 = 10000.;
+
+    float oneT = (1/T0)+(1/B)*log(R1/R0);
+    float T = 1/oneT;
+    T = T-273;
+    return T;
+}
+
 void loop()
 {
 
-    int a0 = analogRead(0);
-    int a1 = analogRead(1);
-    int a2 = analogRead(2);
-    int a3 = analogRead(3);
-    int a4 = analogRead(4);
+    float a0 = 0;
+    float a1 = 0;
+    float a2 = 0;
+    float a3 = 0;
+    float a4 = 0;
 
-    for (int i = 1; i < 50; i++)
+    int end = 50;
+    for (int i = 1; i < end; i++)
     {
-    a0 += analogRead(0);
-    a1 += analogRead(1);
-    a2 += analogRead(2);
-    a3 += analogRead(3);
-    a4 += analogRead(4);
+      a0 += analogRead(0);
+      a1 += analogRead(1);
+      a2 += analogRead(2);
+      a3 += analogRead(3);
+      a4 += analogRead(4);
     }
 
-    a0 = a0/51;
-    a1 = a1/51;
-    a2 = a2/51;
-    a3 = a3/51;
-    a4 = a4/51;
+    a0 = a0/end;
+    a1 = a1/end;
+    a2 = a2/end;
+    a3 = a3/end;
+    a4 = a4/end;
 
-    Input = a0;
+
+    float T0 = therm(a0);
+    Input = T0;
     myPID.Compute();
 
     if(millis() - windowStartTime>WindowSize)
@@ -71,15 +97,35 @@ void loop()
       windowStartTime += WindowSize;
     }
 
-    if (pidder)
+    //if we're on autocontrol.....
+    if (pidder & (millis() - lchange >diff))
     {
-      if(Output > millis() - windowStartTime) stater(1); //fixed it?
-      else stater(0);
+      // pid block
+      // if(Output > millis() - windowStartTime) stater(1); //fixed it?
+      // else stater(0);
+
+      // hack central. hot or cold. no deadband. threshold on setpoint
+      // if too cold.....
+      if (T0 < Setpoint)
+      {
+          if (state == 2)
+          {
+            stater(0); //if currently cold, make neutral
+            delay(2000); //better to just retake heat from sink then to reverse polarity too quickly. arbitrary delay.
+          }
+          else if (state == 0) stater(1); // if it's still to cold, reverse course
+      }
+      else
+      {
+        if (state == 1)    stater(0); // if currently hot, make neutral
+        else if (state==0) stater(2); // if neutral, make cold
+      }
+      lchange = millis(); //waiting period redefined.
     }
 
     if (millis() - sendTime > 5000)
     {
-      sprintf(publishString,"{\"a0\": %d, \"a1\": %d, \"a2\": %d,\"a3\": %d, \"a4\": %d,\"setpoint\":%f,\"output\":%f,\"state\":%d}",a0,a1,a2,a3,a4,Setpoint,Output,state);
+      sprintf(publishString,"{\"a0\": %f, \"a1\": %f, \"a2\": %f,\"a3\": %f, \"a4\": %f,\"setpoint\":%f,\"output\":%f,\"state\":%d,\"T0\":%f}",a0,a1,a2,a3,a4,Setpoint,Output,state,T0);
       Particle.publish("coke_fridge_test",publishString);
       sendTime = millis();
     }
@@ -117,11 +163,12 @@ void stater(int port)
   else if (port == 1) hot();
   else if (port == 2) cold();
   else off();
+  delay(500);
 }
 
 int set_state(String potter)
 {
-  pidder = true;
+  pidder = false;
   stater(potter.toInt());
   //break the input string down into two parts.
   return potter.toInt();
@@ -130,7 +177,7 @@ int set_state(String potter)
 int set_temp(String potter)
 {
   pidder = true;
-  Setpoint = potter.toInt();
+  Setpoint = potter.toFloat();
 
   return Setpoint;
 }
