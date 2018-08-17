@@ -49,22 +49,55 @@ void setup() {
 
 }
 
+// TDKshh= [9.16344619e-04,2.49032242e-04,1.86401575e-07]
+// # HONshh= [7.76655496e-04,2.73964154e-04,7.22722438e-08]
+//
+// def vdiv(A,R2):
+//     R1 = R2 * (4095./array(A)-1)
+//     return R1
+//
+// def R2T(r,shh=TDKshh):
+//     tinv = shh[0] + shh[1] * log(r) + shh[2] * (log(r)**3)
+//     return 1.0/tinv
+//
+
+
+
 float therm(float an)
 {
-    float R2 = 10000.0;
-    float V1 = 4095.0;
+    //Steinhart-Hart Constants
+    float a = 9.16344619e-04;
+    float b = 2.49032242e-04;
+    float c = 1.86401575e-07;
 
-    //R1 = ((V1/a0)-1)*R2
+    //Voltage Divider
+    float V1 = 4095.0;
+    float R2 = 5000.0;
     float R1 = ((V1/an)-1)*R2;
 
-    float B  = 3950.0;
-    float T0 = 296.0;
-    float R0 = 10000.;
-
-    float oneT = (1/T0)+(1/B)*log(R1/R0);
-    float T = 1/oneT;
+    //Together Now
+    float tinv = a + b*log(R1) +  c*log(R1)*log(R1)*log(R1);
+    float T = 1/tinv;
     T = T-273;
     return T;
+    // Crummy 3650's
+    // float R2 = 10000.0;
+    //float V1 = 4095.0;
+    //
+    // //R1 = ((V1/a0)-1)*R2
+    // float R1 = ((V1/an)-1)*R2;
+    //
+    // float B  = 3950.0;
+    // float T0 = 296.0;
+    // float R0 = 10000.;
+    //
+    // float oneT = (1/T0)+(1/B)*log(R1/R0);
+    // float T = 1/oneT;
+    // T = T-273;
+    // return T;
+
+
+
 }
 
 void loop()
@@ -118,7 +151,8 @@ void loop()
             stater(0); //if currently cold, make neutral
             delay(2000); //better to just retake heat from sink then to reverse polarity too quickly. arbitrary delay.
           }
-          else if (state == 0) stater(1); // if it's still to cold, reverse course
+          else if ((Setpoint - T0 > 3)) stater(1); // if it's still too cold, reverse course
+          else if (T0 < 20) stater(0); // turn off if within three degrees and we're on a cold setting
       }
       else
       {
